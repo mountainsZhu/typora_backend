@@ -1,2 +1,2 @@
 # typora_backend
-some infomation about back-end
+线上阅读不方便的可以下载下来用typora打开。中间的所有图片在 mountainsZhu/TyporaImage 工程中
