@@ -2642,7 +2642,7 @@ p.ProId=#{proId}
 
 通俗定义：在父目录下每一个子目录都实现具体的一个功能，对于整个项目来说，这里的每一个springboot都是一个微服务。
 
-![](https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E9%80%9A%E4%BF%97%E5%AE%9A%E4%B9%89.PNG)
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E9%80%9A%E4%BF%97%E5%AE%9A%E4%B9%89.PNG" style="zoom: 67%;" />
 
 ### 分布式
 
@@ -2658,9 +2658,136 @@ p.ProId=#{proId}
 
 
 
-### maven依赖、config配置文件
+### maven依赖
 
-### springcloud - restfull（RestTemplate）
+> 6种依赖范围
+
+```java
+    <dependencies>
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>1.2.17</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+```
+
+`scope`设置的值就是对应的依赖范围(因为`compile` 是默认的依赖范围，所以有时也可以省略)。
+
+**compile**: 编译依赖范围(默认)，对于编译、测试、运行三种classpath都有效
+
+**test**: 测试依赖范围， 只对测试classpath有效。典型范例：Junit
+
+**provided**: 已提供依赖范围 对于编译和测试classpath有效，但在运行时无效。典型范例：servlet-api
+
+**runtime**: 运行时依赖范围 对于测试和运行classpath有效，但在对编译主代码时无效。典型范例：JDBC
+
+**system**: 系统依赖范围
+
+**import**: (maven2.0.9及以上): 导入依赖范围，它不会对三种实际的classpath产生影响
+
+> 传递性
+
+- 如果A依赖B，B依赖C(假设依赖范围都是complile)，那么A中不仅会有B的jar包，还会有C的jar包。
+- 如果A同时依赖于B、C,而B、C的某个同名jar包版本不同，则A中会用B、C中先声明的版本。
+- 如果A依赖B，B依赖C，而B、C中的某个同名jar包版本不同，那么A中会应用近的B中的jar包。
+
+
+
+#### Nginx
+
+> 基本操作
+
+```java
+//开启nginx
+start nginx
+//关闭nginx
+nginx -s stop
+//重启nginx
+nginx -s reload
+```
+
+
+
+> 正向代理与反向代理
+
+**正向代理**的过程，它隐藏了真实的请求客户端，服务端不知道真实的客户端是谁，客户端请求的服务都被代理服务器代替来请求，某些科学上网工具扮演的就是典型的正向代理角色。用浏览器访问 [http://www.google.com](https://link.zhihu.com/?target=http%3A//www.google.com/) 时，被残忍的block，于是你可以在国外搭建一台代理服务器，让代理帮我去请求google.com，代理把请求返回的相应结构再返回给我。
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E6%AD%A3%E5%90%91%E4%BB%A3%E7%90%86%E5%9B%BE%E8%A7%A3.PNG" style="zoom:50%;" />
+
+**反向代理**隐藏了真实的服务端，当我们请求 www.baidu.com 的时候，就像拨打10086一样，背后可能有成千上万台服务器为我们服务，但具体是哪一台，你不知道，也不需要知道，你只需要知道反向代理服务器是谁就好了， www.baidu.com 就是我们的反向代理服务器，反向代理服务器会帮我们把请求转发到真实的服务器那里去。Nginx就是性能非常好的反向代理服务器，用来做负载均衡。
+
+
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%9B%BE%E8%A7%A3.PNG" style="zoom:50%;" />
+
+
+
+> 动静分离
+
+所谓的动静分离就是指图片，css, js之类的都交给nginx来处理，nginx处理不了的，比如jsp、servlet就交给tomcat来处理。而nginx处理静态资源的吞吐量很高，能提高效率。
+
+
+
+> 实操
+
+假设两个tomcat分别是8111和8222；
+
+- 要实现**反向代理**：修改nginx.config中location为：
+
+```java
+location / {
+        	proxy_pass http://127.0.0.1:8111;
+	}
+```
+
+**location /** 表示处理所有请求
+**proxy_pass http://127.0.0.1:8111;** 表示把请求都交给http://127.0.0.1:8111来处理。
+
+
+
+- 要实现**动静分离**：在nginx.config中添加：
+
+```java
+ location ~\.(css|js|png)$ {
+        	root D:/testTomcat/tomcat8111/webapps/ROOT;//自己tomcat的ROOT的位置
+	}
+```
+
+这表示所有的css js png访问都由nginx来做。(这时候如果访问相同的页面，只有jsp部分是由tomcat做的，而静态部分都是由nginx代理的)
+
+
+
+- 要实现负载均衡：首先增加一个upstream ，用来指向这两个tomcat ; 然后修改location，反向代理到上述配置。
+
+```java
+upstream tomcat_8111_8222{ //注意，这个配置要放到nginx.config的server{}外
+		server	127.0.0.1:8111 weight=1;
+		server	127.0.0.1:8222 weight=2;
+	}
+
+ location / {
+        	proxy_pass http://tomcat_8111_8222;
+	}
+
+//此步选择配置，增加一个静态资源获取位置
+location ~ \.(css|js|png)$ {
+        	root D:/testTomcat/tomcat8111/webapps/ROOT,D:/testTomcat/tomcat8222/webapps/ROOT;
+		}
+```
+
+
+
+> session共享问题
+
+如果有多个tomcat A、B、C服务器，在A上已经登录了，但是下一次访问时，因为负载均衡，跳转到B，而B上并没有登录信息，所以会呈现未登录的状态。
+
+解决办法：
+
+利用redis缓存登录的session，每次从redis上取session。
+
+
 
 #### 微服务管理（eureka、zookeeper）
 
@@ -2670,9 +2797,475 @@ p.ProId=#{proId}
 
 #### 消息队列MQ（kafka、消息中间件、RabbitMQ、ActiveMQ）
 
-### 缓存（memcache）
-
 ### 搜索（elasticseach）
+
+> 核心概念
+
+| elesticsearch | mysql  |
+| ------------- | ------ |
+| 索引          | 数据库 |
+| 类型type      | 表     |
+| 文档document  | 行     |
+| 字段field     | 列     |
+
+
+
+> 倒排索引
+
+将一整段话拆分成多个单词，在查询时先访问倒排索引区域，根据倒排索引获取文档编号，再通过文档编号获取文档内容。
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E5%80%92%E6%8E%92%E7%B4%A2%E5%BC%95.PNG" style="zoom:67%;" />
+
+
+
+###### Lucenc
+
+Lucene是一套用于全文检索和搜寻的开源程序库，由Apache软件基金会支持和提供.
+
+> 全文索引
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95.PNG" style="zoom: 67%;" />
+
+> Elasticseach与Lucenc的关系
+
+Elasticsearch：基于Lucene开发的企业级的搜索引擎产品
+
+> 详细解释
+
+见博客：
+
+[https://blog.csdn.net/weixin_42633131/article/details/82873731]: https://blog.csdn.net/weixin_42633131/article/details/82873731
+
+
+
+> elasticsearch.yml 在配置文件配置跨域
+
+```shell
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+```
+
+
+
+###### 开启head界面
+
+```shell
+#head文件夹下
+npm run start
+```
+
+
+
+###### kibana
+
+> Kibana汉化
+
+在kibana.yml下加上 i18n.locale: "zh-CN"
+
+然后打开：
+
+![](https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/kibana%E7%95%8C%E9%9D%A2.PNG)
+
+如果出现超时无法连接的现象：
+
+原因有2：
+
+①内存不足：
+
+解决办法：修改elasticsearch 的jvm.options的内存大小
+
+```shell
+# Xms represents the initial size of total heap space
+# Xmx represents the maximum size of total heap space
+
+-Xms512m
+-Xmx512m
+```
+
+②超时时间短：
+
+解决办法：默认超时时间为30s，可以修改kibana.yml的超时时间
+
+```shell
+# Time in milliseconds to wait for responses from the back end or Elasticsearch. This value
+# must be a positive integer.
+#elasticsearch.requestTimeout: 30000
+elasticsearch.requestTimeout: 60000
+```
+
+###### ik分词器
+
+> 下载安装
+
+下载解压ik分词器包到elasticsearch的plugins包下。
+
+> 两种分词方式
+
+- ik_smart：最少切分
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/ik_smart.PNG" style="zoom:50%;" />
+
+- ik_max_word：最细粒度划分
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/ik_max_word.PNG" style="zoom: 50%;" />
+
+> 扩展分词
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E6%8B%93%E5%B1%95%E5%88%86%E8%AF%8D%E5%99%A8.png" style="zoom:50%;" />
+
+效果：“祝承熙”被识别为一个词
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/%E6%B7%BB%E5%8A%A0%E5%88%86%E8%AF%8D%E6%95%88%E6%9E%9C.png" style="zoom:50%;" />
+
+###### Rest风格操作
+
+![](https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/elasticsearch_rest.jpg)
+
+> 创建一个索引并加入字段
+
+```javascript
+PUT /test1/type1/1
+{
+  "name":"zss",
+  "age":10
+}
+```
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E6%8F%92%E5%85%A5%E5%90%8E%E6%95%B0%E6%8D%AE.png" style="zoom: 67%;" />
+
+> 创建一个索引，不加入字段（指定数据类型），类似于建数据库
+
+```javascript
+PUT test2
+{
+  "mappings": {
+      "properties": {
+        "name":{
+          "type": "text",
+          "analyzer": "ik_max_word"
+        },
+        "age":{
+          "type": "long"
+        },
+        "birthday":{
+          "type": "date"
+        }
+    }
+  }
+}
+```
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E6%8F%92%E5%85%A5%E5%90%8E%E6%95%B0%E6%8D%AE2.png" style="zoom:67%;" />
+
+对应创建：
+
+```javascript
+PUT test2/_doc/4
+{
+  "name":"zrj",
+  "age":5,
+  "birthday":"1999-01-19"
+}
+```
+
+已经创建的mapping不能更改，但是可以添加新的字段：
+
+```javascript
+PUT test2/_mapping
+{
+    "properties": {
+      "tags":{
+        "type": "text",
+        "analyzer": "ik_max_word"
+      }
+  }
+}
+```
+
+
+
+> 获取规则信息
+
+```javascript
+GET test2
+```
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E6%9F%A5%E7%9C%8B%E8%A7%84%E5%88%99.png" style="zoom: 50%;" />
+
+> 获取es更多信息
+
+```javascript
+GET _cat/······
+```
+
+> 修改
+
+- 直接用PUT覆盖
+
+```javascript
+PUT /test3/type3/1
+{
+  "name":"zssnb",
+  "age":10,
+  "birthday":"1998-01-01"
+}
+```
+
+
+
+修改前：
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E4%BF%AE%E6%94%B9%E5%AF%B9%E6%AF%94_%E5%89%8D.png" style="zoom:67%;" />
+
+修改后：
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E4%BF%AE%E6%94%B9%E5%AF%B9%E6%AF%94_%E5%90%8E.png" style="zoom:67%;" />
+
+- 用update
+
+```javascript
+POST /test3/type3/1/_update
+{
+  "doc":{
+    "name":"zssnbnb"
+  }
+}
+```
+
+![](D:\Typora\图片\es修改_update.png)
+
+>删除文档
+
+```javascript
+DELETE test3/···/··· //后面省略号处也可以不加
+```
+
+>查看所有数据
+
+```javascript
+POST test1/···/···/_search
+```
+
+> 复杂查询
+
+1. **一般查询**
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "match": {
+      "name": "z" //匹配条件
+    }
+  },
+  "_source": ["name","birthday"] //查询哪些数据，不写默认查全部
+  , "sort": [
+    {
+      "age": {
+        "order": "desc" //排序方式
+      }
+    }
+  ],
+  "from":0, //分页起始页
+  "size":2 //显示数据量
+}
+
+```
+
+2. **多条件匹配，返回bool值**
+
+must（and）
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "bool":{
+      "must":[
+        {
+          "match": {
+            "name": "z"
+          }
+        },
+        {
+          "match":{
+            "age":15
+          } 
+        }
+      ]
+    }
+  }
+}
+```
+
+or（should）
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "bool":{
+      "should":[
+        {
+          "match": {
+            "name": "z"
+          }
+        },
+        {
+          "match":{
+            "age":15
+          } 
+        }
+      ]
+    }
+  },
+  "_source": ["name","birthday"]
+  , "sort": [
+    {
+      "age": {
+        "order": "desc"
+      }
+    }
+  ],
+  "from":0,
+  "size":2
+}
+```
+
+must_not（not）
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "bool":{
+      "must_not":[
+        {
+          "match": {
+            "name": "z"
+          }
+        },
+        {
+          "match":{
+            "age":15
+          } 
+        }
+      ]
+    }
+  },
+  "_source": ["name","birthday"]
+  , "sort": [
+    {
+      "age": {
+        "order": "desc"
+      }
+    }
+  ],
+  "from":0,
+  "size":2
+}
+```
+
+3. **过滤器**
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "bool":{
+      "must":[
+        {
+          "match": {
+            "name": "z"
+          }
+        }
+      ],
+      "filter":{
+        "range":{
+          "age":{
+            "gt":16
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+4. **精确查询**
+
+keyword只能查完全匹配的。
+
+```javascript
+PUT test2
+{
+  "mappings": {
+      "properties": {
+        "name":{
+          "type": "keyword",
+          "analyzer": "ik_max_word"
+        }
+    }
+  }
+}
+```
+
+term表示完全匹配，不用分词器
+
+```javascript
+{
+  "query": {
+    "term": {
+      "content": "汽车保养"
+    }
+  }
+}
+```
+
+5. **对应搜索字段高亮**
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "match": {
+      "tags":"技术 男"
+    }
+  },
+  "highlight":{
+      "fields":{
+        "tags":{}
+      }
+    }
+}
+
+```
+
+结果：
+
+<img src="D:\Typora\图片\es默认高亮.png" style="zoom:67%;" />
+
+`自定义高亮`
+
+```javascript
+POST test2/_doc/_search
+{
+  "query": {
+    "match": {
+      "tags":"技术 男"
+    }
+  },
+  "highlight":{
+    "pre_tags":"<p class='···' style='color:red'>",
+    "post_tags":"</p>",
+      "fields":{
+        "tags":{}
+      }
+    }
+}
+```
+
+<img src="https://raw.githubusercontent.com/mountainsZhu/TyporaImage/main/img/es%E8%87%AA%E5%AE%9A%E4%B9%89%E9%AB%98%E4%BA%AE.png" style="zoom:67%;" />
 
 
 
@@ -3038,6 +3631,58 @@ Extra:执行情况的描述和说明
    - 关注：user->user（同一个表的不同数据）
    - 友链：links(单独一个表)
    - 评论：commit->user->blog(多个表)·
+
+
+
+### 原始JDBC操作
+
+> statement
+
+```java
+String sql = "insert into t_student(name,age) values ('乔峰',30)";    
+// 1.加载注册驱动
+Class.forName("com.mysql.jdbc.Driver");
+ 
+// 2.获取数据库连接对象
+String url = "jdbc:mysql://localhost:3306/jdbcdemo?characterEncoding=utf-8&useSSL=true"
+String username = zss;
+String password = zssnb;
+Connection conn = DriverManager.getConnection(url, username, password);
+// 3.创建语句对象来操作sql
+Statement st = conn.createStatement();
+         
+// 4.执行SQL语句
+// int rows = st.executeUpdate(String sql);执行DDL和DML语句,放回的是受影响的行数
+/* ResultSet res = st.executeQuery(String sql);执行DQL查询语句，返回的结果集对象
+	while(res.next){取数据}
+*/
+int rows = st.executeUpdate(sql);
+System.out.println(rows);
+//5.释放资源（先开后关）
+st.close();
+conn.close();
+```
+
+
+
+> PreparedStatement(效率更高)
+
+```java
+Class.forName("com.mysql.jdbc.Driver");
+		Connection con = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3306/test", "root", "123456");
+		//预编译，先写sql，不执行，?为占位符
+		PreparedStatement ps = con.prepareStatement("insert into user values(?,?)");
+		ps.setInt(1, 111);
+		ps.setInt(2, 20);
+		int result = ps.executeUpdate();
+		if(result == 1){
+			System.out.println("插入成功！");
+		}else{
+			System.out.println("插入失败");
+		}
+		con.close();
+
+```
 
 
 
